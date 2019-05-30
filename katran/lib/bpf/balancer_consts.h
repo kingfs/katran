@@ -52,8 +52,17 @@
 #define MAX_REALS 4096
 #endif
 
-// we are using first 12bits from quic's connection id to store real's index
-#define MAX_QUIC_REALS 4096
+// maximum number of prefixes in lpm map for src based routing.
+#ifndef MAX_LPM_SRC
+#define MAX_LPM_SRC 3000000
+#endif
+
+#ifndef MAX_DECAP_DST
+#define MAX_DECAP_DST 6
+#endif
+
+// use 16 bits in quic's connection id to store real's index
+#define MAX_QUIC_REALS 65535 // 2^16-1
 
 #define CTL_MAP_SIZE 16
 #define CH_RINGS_SIZE (MAX_VIPS * RING_SIZE)
@@ -90,25 +99,41 @@
 #define F_QUIC_VIP (1 << 2)
 // use only dst port for the hash calculation
 #define F_HASH_DPORT_ONLY (1 << 3)
+// check if src based routing should be used
+#define F_SRC_ROUTING (1 << 4)
 // packet_description flags:
 // the description has been created from icmp msg
 #define F_ICMP (1 << 0)
 // tcp packet had syn flag set
 #define F_SYN_SET (1 << 1)
+// packet was decapsulated inline
+#define F_INLINE_DECAP (1 << 2)
 
 // ttl for outer ipip packet
 #ifndef DEFAULT_TTL
 #define DEFAULT_TTL 64
 #endif
 
-// from draft-ietf-quic-transport-05
+// QUIC invariants from draft-ietf-quic-transport-17
 #define QUIC_LONG_HEADER 0x80
-#define QUIC_CLIENT_INITIAL 0x02
-#define QUIC_0RTT 0x06
-#define QUIC_CONN_ID_PRESENT 0x40
-#define CLIENT_GENERATED_ID (QUIC_CLIENT_INITIAL | QUIC_0RTT)
-// 1 byte public flags + 8 byte connection id
-#define QUIC_HDR_SIZE 9
+#define QUIC_SHORT_HEADER 0x00
+// Long header packet types (with alignment of 8-bits for packet-type)
+#define QUIC_CLIENT_INITIAL 0x00
+#define QUIC_0RTT 0x10
+#define QUIC_HANDSHAKE 0x20
+#define QUIC_RETRY 0x30
+#define QUIC_PACKET_TYPE_MASK 0x30
+
+// Implementation specific constants:
+// Require connection id to be of minimum length
+#ifndef QUIC_MIN_CONNID_LEN
+#define QUIC_MIN_CONNID_LEN 8
+#endif
+// explicitly version the connection id
+#ifndef QUIC_CONNID_VERSION
+#define QUIC_CONNID_VERSION 0x1
+#endif
+
 
 // max ethernet packet's size which destination is a vip
 // we need to inforce it because if origin_packet + encap_hdr > MTU
@@ -118,14 +143,28 @@
 #define MAX_PCKT_SIZE 1514
 #endif
 
+// for v4 and v6: initial packet would be truncated to the size of eth header
+// plus ipv4/ipv6 header and few bytes of payload
+#define ICMP_TOOBIG_SIZE 98
+#define ICMP6_TOOBIG_SIZE 262
+
+
+#define ICMP6_TOOBIG_PAYLOAD_SIZE (ICMP6_TOOBIG_SIZE - 6)
+#define ICMP_TOOBIG_PAYLOAD_SIZE (ICMP_TOOBIG_SIZE - 6)
+
 #define NO_FLAGS 0
 
-// offset of the lru cache hit related cntrs
+// offset of the lru cache hit related counters
 #define LRU_CNTRS 0
 #define LRU_MISS_CNTR 1
 #define NEW_CONN_RATE_CNTR 2
 #define FALLBACK_LRU_CNTR 3
-
+// offset of icmp related counters
+#define ICMP_TOOBIG_CNTRS 4
+// offset of src routing lookup counters
+#define LPM_SRC_CNTRS 5
+// offset of remote encaped packets counters
+#define REMOTE_ENCAP_CNTRS 6
 // max ammount of new connections per seconda per core for lru update
 // if we go beyond this value - we will bypass lru update.
 #ifndef MAX_CONN_RATE
@@ -152,6 +191,35 @@
 
 #ifndef IPIP_V6_PREFIX3
 #define IPIP_V6_PREFIX3 0
+#endif
+
+// initial value for jhash hashing function, used to pick up a real server
+#ifndef INIT_JHASH_SEED
+#define INIT_JHASH_SEED CH_RINGS_SIZE
+#endif
+
+// initial value for jhash hashing function, used to pick up a real server
+// w/ ipv6 address
+#ifndef INIT_JHASH_SEED_V6
+#define INIT_JHASH_SEED_V6 MAX_VIPS
+#endif
+
+
+
+/*
+ * optional features (requires kernel support. turned off by default)
+ * to be able to enable them, you need to define them in compile time
+ * (pass them with -D flag):
+ *
+ * ICMP_TOOBIG_GENERATION - allow to generate icmp's "packet to big"
+ * if packet's size > MAX_PCKT_SIZE
+ *
+ * LPM_SRC_LOOKUP - allow to do src based routing/dst decision override
+ *
+ * INLINE_DECAP - allow do to inline ipip decapsulation in XDP context
+ */
+#ifdef LPM_SRC_LOOKUP
+#define INLINE_DECAP
 #endif
 
 #endif // of __BALANCER_CONSTS_H

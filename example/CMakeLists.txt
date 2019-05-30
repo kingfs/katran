@@ -1,5 +1,6 @@
 cmake_minimum_required (VERSION 3.0)
 project (katranserver-proj)
+set (CMAKE_CXX_STANDARD 14)
 
 # thrift cmake macro
 find_program(THRIFT1 thrift1)
@@ -43,6 +44,8 @@ find_library(LIBSNAPPY libsnappy.a snappy)
 find_library(LIBZSTD libzstd.a zstd)
 find_library(LIBBOOST_CONTEXT libboost_context.a boost_context)
 find_library(LIBRE2 libre2.a re2)
+find_library(LIBSODIUM libsodium.a libsodium)
+find_library(LIBFIZZ libfizz.a libfizz)
 
 add_library(simple_service_handler
     KatranSimpleServiceHandler.cpp
@@ -80,6 +83,8 @@ target_link_libraries(simple_katran_server
     "${LIBCONCURRENCY}"
     "${LIBASYNC}"
     "${LIBWANGLE}"
+    "${LIBSODIUM}"
+    "${LIBFIZZ}"
     "${LIBGSS}"
     "${LIBLZMA}"
     "${LIBLZ4}"

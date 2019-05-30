@@ -1,10 +1,20 @@
 cmake_minimum_required(VERSION 3.9)
 project(katran_grpc)
+set (CMAKE_CXX_STANDARD 14)
 
 find_library(PROTOBUF libprotobuf.a protobuf)
-find_library(GRPC libgrpc.a grpc)
-find_library(GRPC++ libgrpc++.a grpc++)
-find_library(GRPC_UNSECURE libgrpc_unsecure.a grpc_unsecure)
+set(GRPC_BUILD_PATH "${CMAKE_SOURCE_DIR}/deps/grpc/build/")
+set(GRPC_LIBRARIES_PATH "${GRPC_BUILD_PATH}")
+set(CARES_LIBRARIES_PATH "${GRPC_LIBRARIES_PATH}/third_party/cares/cares/lib")
+find_library(ADDR_SORT libaddress_sorting.a address_sorting PATHS ${GRPC_LIBRARIES_PATH} NO_DEFAULT_PATH)
+find_library(GPR libgpr.a gpr PATHS ${GRPC_LIBRARIES_PATH} NO_DEFAULT_PATH)
+find_library(GRPC libgrpc.a grpc PATHS ${GRPC_LIBRARIES_PATH} NO_DEFAULT_PATH)
+find_library(GRPC++ libgrpc++.a grpc++ PATHS ${GRPC_LIBRARIES_PATH} NO_DEFAULT_PATH)
+find_library(CARES libcares.a cares PATHS ${CARES_LIBRARIES_PATH} NO_DEFAULT_PATH)
+find_library(GRPC_UNSECURE libgrpc_unsecure.a grpc_unsecure PATHS ${GRPC_LIBRARIES_PATH} NO_DEFAULT_PATH)
+find_library(LIBIBERTY libiberty.a iberty)
+find_library(DL dl)
+find_library(EVENT libevent.a event)
 find_package(Protobuf REQUIRED)
 
 set(PROTO_PATH "${CMAKE_SOURCE_DIR}/example_grpc/protos")
@@ -29,7 +39,7 @@ add_custom_command(
     COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
     ARGS "--proto_path=${PROTO_PATH}"
          "--grpc_out=${GENERATED_PROTOBUF_PATH}"
-         "--plugin=protoc-gen-grpc=/usr/local/bin/grpc_cpp_plugin"
+         "--plugin=protoc-gen-grpc=${GRPC_BUILD_PATH}/grpc_cpp_plugin"
          "${KATRAN_PROTO}"
     COMMENT "generating grpc files"
     )
@@ -60,6 +70,9 @@ target_link_libraries(grpc_signal_handler
     "${DL}"
     "${EVENT}"
     "${GRPC++}"
+    "${GPR}"
+    "${ADDR_SORT}"
+    "${CARES}"
 )
 
 add_executable(katran_server_grpc katran_server.cpp)
@@ -69,6 +82,9 @@ target_link_libraries(katran_server_grpc
   "${LIBLZMA}"
   "${PROTOBUF}"
   "${GRPC++}"
+  "${GPR}"
+  "${ADDR_SORT}"
+  "${CARES}"
   "${FOLLY}"
   "${GLOG}"
   "${GFLAGS}"

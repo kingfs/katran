@@ -29,8 +29,12 @@ constexpr uint32_t kDefaultMaxVips = 512;
 constexpr uint32_t kDefaultMaxReals = 4096;
 constexpr uint32_t kDefaultPriority = 2307;
 constexpr uint32_t kLbDefaultChRingSize = 65537;
+constexpr uint32_t kDefaultMaxLpmSrcSize = 3000000;
+constexpr uint32_t kDefaultMaxDecapDstSize = 6;
 constexpr unsigned int kDefaultLruSize = 8000000;
+constexpr uint32_t kNoFlags = 0;
 std::string kNoExternalMap = "";
+std::string kDefaultHcInterface = "";
 } // namespace
 
 /**
@@ -68,6 +72,15 @@ struct QuicReal {
 };
 
 /**
+ * types of address
+ */
+enum class AddressType {
+  INVALID,
+  HOST,
+  NETWORK,
+};
+
+/**
  * struct which contains all configurations for KatranLB
  * @param string mainInterface name where to attach bpf prog (e.g eth0)
  * @param string v4TunInterface name for ipip encap (for healtchecks)
@@ -86,6 +99,9 @@ struct QuicReal {
  * @param uint64_t LruSize size of connection table
  * @param std::vector<int32_t> forwardingCores responsible for forwarding
  * @param std::vector<int32_t> numaNodes mapping of cores to NUMA nodes
+ * @param uint32_t maxLpmSrcSize maximum size of map for src based routing
+ * @param uint32_t maxDecapDst maximum number of destinations for inline decap
+ * @param std::string hcInterface interface where we want to attach hc bpf prog
  *
  * note about rootMapPath and rootMapPos:
  * katran has two modes of operation.
@@ -101,6 +117,9 @@ struct QuicReal {
  * in this case rootMapPath must be path to "pinned" map, which has been
  * used by root xdp prog, and rootMapPos is a position (index) of
  * katran's fd inside this map.
+ *
+ * by default, if hcInterface is not specified we are going to attach
+ * healthchecking bpf program to the mainInterfaces
  */
 struct KatranConfig {
   std::string mainInterface;
@@ -120,6 +139,10 @@ struct KatranConfig {
   uint64_t LruSize = kDefaultLruSize;
   std::vector<int32_t> forwardingCores;
   std::vector<int32_t> numaNodes;
+  uint32_t maxLpmSrcSize = kDefaultMaxLpmSrcSize;
+  uint32_t maxDecapDst = kDefaultMaxDecapDstSize;
+  std::string hcInterface = kDefaultHcInterface;
+  uint32_t xdpAttachFlags = kNoFlags;
 };
 
 /**

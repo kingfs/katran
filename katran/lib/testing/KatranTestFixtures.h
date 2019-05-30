@@ -169,45 +169,57 @@ const std::vector<std::pair<std::string, std::string>> inputTestFixtures = {
   },
   //22
   {
-    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\x82\x00\x00\x00\x00\x00\x00\x00@'
-    "AgAAAAAAAQAAAAAACABFAAAlAAEAAEARrSjAqAEqCsgBBXppAbsAEfQHggAAAAAAAABA",
-    "QUIC: long header. Client Initial type"
+    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\xcf\xfa\xce\xb0\x0c\x80\x41\x02\x03\x04\x05\x06\x07\x00\x01\x11\x01quic data\x00@'
+    "AgAAAAAAAQAAAAAACABFAAA4AAEAAEARrRXAqAEqCsgBBXppAbsAJAacz/rOsAyAQQIDBAUGBwABEQFxdWljIGRhdGEAQA==",
+    "QUIC: long header. Client Initial type. LRU miss"
   },
   //23
   {
-    //Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\x86\x00\x00\x00\x00\x00\x00\x00@'
-    "AgAAAAAAAQAAAAAACABFAAAlAAEAAEARrSjAqAEqCsgBBXppAbsAEfAHhgAAAAAAAABA",
-    "QUIC: long header. 0-RTT Protected"
+    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\xdf\xfa\xce\xb0\x0c\x80\x43\xFF\x33\x44\x55\x66\x77\x88\x01\x11\x01quic data\x00@'
+    "AgAAAAAAAQAAAAAACABFAAA4AAEAAEARrRXAqAEqCsgBBXppAbsAJAJ23/rOsAyAQ/8zRFVmd4gBEQFxdWljIGRhdGEAQA==",
+    "QUIC: long header. 0-RTT Protected. CH. LRU hit."
   },
   //24
   {
-    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\x80\x00\x00\x00\x00\x00\x00\x00@'
-    "AgAAAAAAAQAAAAAACABFAAAlAAEAAEARrSjAqAEqCsgBBXppAbsAEfYHgAAAAAAAAABA",
-    "QUIC: long header. v4 vip v6 real"
+    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\xef\xfa\xce\xb0\x0c\x80\x44\x01\x03\x04\x05\x06\x07\x00\x01\x11\x01quic data\x00@'
+    "AgAAAAAAAQAAAAAACABFAAA4AAEAAEARrRXAqAEqCsgBBXppAbsAJOOc7/rOsAyARAEDBAUGBwABEQFxdWljIGRhdGEAQA==",
+    "QUIC: long header. Handshake. v4 vip v6 real. Conn Id based."
   },
   //25
   {
-    // Ether(src="0x1", dst="0x2")/IPv6(src="fc00:2::42", dst="fc00:1::2")/UDP(sport=31337, dport=443)/'\x80\x00\x00\x00\x00\x00\x00 @'
-    "AgAAAAAAAQAAAAAAht1gAAAAABERQPwAAAIAAAAAAAAAAAAAAEL8AAABAAAAAAAAAAAAAAACemkBuwARyz6AAAAAAAAAIEA=",
-    "QUIC: long header. v6 vip v6 real"
+    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\xff\xfa\xce\xb0\x0c\x80\x44\x01\x03\x04\x05\x06\x07\x00\x01\x11\x01quic data\x00@'
+    "AgAAAAAAAQAAAAAACABFAAA4AAEAAEARrRXAqAEqCsgBBXppAbsAJNOc//rOsAyARAEDBAUGBwABEQFxdWljIGRhdGEAQA==",
+    "QUIC: long header. Retry. v4 vip v6 real. Conn Id based."
   },
   //26
   {
-    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\x00\x00\x00\x00\x00\x00\x00\x00@'
-    "AgAAAAAAAQAAAAAACABFAAAlAAEAAEARrSjAqAEqCsgBBXppAbsAEXYIAAAAAAAAAABA",
-    "QUIC: short header. no connection id"
+    // Ether(src="0x1", dst="0x2")/IPv6(src="fc00:2::42", dst="fc00:1::2")/UDP(sport=31337, dport=443)/'\xcf\xfa\xce\xb0\x0c\x80\x44\x01\x03\x04\x05\x06\x07\x00\x01\x11\x01quic data\x00@'
+    "AgAAAAAAAQAAAAAAht1gAAAAACQRQPwAAAIAAAAAAAAAAAAAAEL8AAABAAAAAAAAAAAAAAACemkBuwAk2PPP+s6wDIBEAQMEBQYHAAERAXF1aWMgZGF0YQBA",
+    "QUIC: long header. client initial. v6 vip v6 real. LRU miss"
   },
   //27
   {
-    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\x40\x00\x00\x00\x00\x00\x00\x00@'
-    "AgAAAAAAAQAAAAAACABFAAAlAAEAAEARrSjAqAEqCsgBBXppAbsAETYIQAAAAAAAAABA",
-    "QUIC: short header w/ connection id"
+    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\x00'
+    "AgAAAAAAAQAAAAAACABFAAAdAAEAAEARrTDAqAEqCsgBBXppAbsACbYYAA==",
+    "QUIC: short header. No connection id. CH. LRU hit"
   },
   //28
   {
-    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\x40\x00\x00\x00\x00\x00\x00\x00\x80'
-    "AgAAAAAAAQAAAAAACABFAAAlAAEAAEARrSjAqAEqCsgBBXppAbsAEfYHQAAAAAAAAACA",
+    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\x00\x41\x00\x83\x04\x05\x06\x07\x00@'
+    "AgAAAAAAAQAAAAAACABFAAAmAAEAAEARrSfAqAEqCsgBBXppAbsAEqr2AEEAgwQFBgcAQA==",
+    "QUIC: short header w/ connection id"
+  },
+  //29
+  {
+    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\x00\x41\x11\x00\x00\x00\x00\x00\x00@'
+    "AgAAAAAAAQAAAAAACABFAAAmAAEAAEARrSfAqAEqCsgBBXppAbsAEqSFAEERAAAAAAAAQA==",
     "QUIC: short header w/ connection id but non-existing mapping"
+  },
+  //30
+  {
+    // Ether(src="0x1", dst="0x2")/IP(src="192.168.1.42", dst="10.200.1.5")/UDP(sport=31337, dport=443)/'\x00\x40\x00\x03\x04\x05\x06\x07\x00@'
+    "AgAAAAAAAQAAAAAACABFAAAmAAEAAEARrSfAqAEqCsgBBXppAbsAEqt3AEAAAwQFBgcAQA==",
+    "QUIC: short header w/ conn id. host id = 0. CH. LRU hit"
   },
 };
 
@@ -320,37 +332,47 @@ const std::vector<std::pair<std::string, std::string>> outputTestFixtures = {
   },
   //22
   {
-    "AADerb6vAgAAAAAACABFAAA5AAAAAEAEXF+sEGhQCgAAAkUAACUAAQAAQBGtKMCoASoKyAEFemkBuwAR9AeCAAAAAAAAAEA=",
+    "AADerb6vAgAAAAAACABFAABMAAAAAEAEXEysEGhQCgAAAkUAADgAAQAAQBGtFcCoASoKyAEFemkBuwAkBpzP+s6wDIBBAgMEBQYHAAERAXF1aWMgZGF0YQBA",
     "XDP_TX"
   },
   //23
   {
-    "AADerb6vAgAAAAAACABFAAA5AAAAAEAEXF+sEGhQCgAAAkUAACUAAQAAQBGtKMCoASoKyAEFemkBuwAR8AeGAAAAAAAAAEA=",
+    "AADerb6vAgAAAAAACABFAABMAAAAAEAEXEysEGhQCgAAAkUAADgAAQAAQBGtFcCoASoKyAEFemkBuwAkAnbf+s6wDIBD/zNEVWZ3iAERAXF1aWMgZGF0YQBA",
     "XDP_TX"
   },
   //24
   {
-    "AADerb6vAgAAAAAAht1gAAAAACUEQAEAAAAAAAAAAAAAALrBASr8AAAAAAAAAAAAAAAAAAABRQAAJQABAABAEa0owKgBKgrIAQV6aQG7ABH2B4AAAAAAAAAAQA==",
+    "AADerb6vAgAAAAAACABFAABMAAAAAEAEXE2sEGhQCgAAAUUAADgAAQAAQBGtFcCoASoKyAEFemkBuwAk45zv+s6wDIBEAQMEBQYHAAERAXF1aWMgZGF0YQBA",
     "XDP_TX"
   },
   //25
   {
-    "AADerb6vAgAAAAAAht1gAAAAADkpQAEAAAAAAAAAAAAAAHppAEL8AAAAAAAAAAAAAAAAAAACYAAAAAAREUD8AAACAAAAAAAAAAAAAABC/AAAAQAAAAAAAAAAAAAAAnppAbsAEcs+gAAAAAAAACBA",
+    "AADerb6vAgAAAAAACABFAABMAAAAAEAEXE2sEGhQCgAAAUUAADgAAQAAQBGtFcCoASoKyAEFemkBuwAk05z/+s6wDIBEAQMEBQYHAAERAXF1aWMgZGF0YQBA",
     "XDP_TX"
   },
   //26
   {
-    "AADerb6vAgAAAAAACABFAAA5AAAAAEAEXF+sEGhQCgAAAkUAACUAAQAAQBGtKMCoASoKyAEFemkBuwARdggAAAAAAAAAAEA=",
+    "AADerb6vAgAAAAAAht1gAAAAAEwpQAEAAAAAAAAAAAAAAHppAEL8AAAAAAAAAAAAAAAAAAABYAAAAAAkEUD8AAACAAAAAAAAAAAAAABC/AAAAQAAAAAAAAAAAAAAAnppAbsAJNjzz/rOsAyARAEDBAUGBwABEQFxdWljIGRhdGEAQA==",
     "XDP_TX"
   },
   //27
   {
-    "AADerb6vAgAAAAAAht1gAAAAACUEQAEAAAAAAAAAAAAAALrBASr8AAAAAAAAAAAAAAAAAAABRQAAJQABAABAEa0owKgBKgrIAQV6aQG7ABE2CEAAAAAAAAAAQA==",
+    "AADerb6vAgAAAAAACABFAAAxAAAAAEAEXGesEGhQCgAAAkUAAB0AAQAAQBGtMMCoASoKyAEFemkBuwAJthgA",
     "XDP_TX"
   },
   //28
   {
-    "AADerb6vAgAAAAAACABFAAA5AAAAAEAEXGCsEGhQCgAAAUUAACUAAQAAQBGtKMCoASoKyAEFemkBuwAR9gdAAAAAAAAAAIA=",
+    "AADerb6vAgAAAAAAht1gAAAAACYEQAEAAAAAAAAAAAAAALrBASr8AAAAAAAAAAAAAAAAAAACRQAAJgABAABAEa0nwKgBKgrIAQV6aQG7ABKq9gBBAIMEBQYHAEA=",
+    "XDP_TX"
+  },
+  //29
+  {
+    "AADerb6vAgAAAAAACABFAAA6AAAAAEAEXF+sEGhQCgAAAUUAACYAAQAAQBGtJ8CoASoKyAEFemkBuwASpIUAQREAAAAAAABA",
+    "XDP_TX"
+  },
+  //30
+  {
+    "AADerb6vAgAAAAAACABFAAA6AAAAAEAEXF6sEGhQCgAAAkUAACYAAQAAQBGtJ8CoASoKyAEFemkBuwASq3cAQAADBAUGBwBA",
     "XDP_TX"
   },
 };

@@ -19,15 +19,19 @@ set -xeo pipefail
 NCPUS=$(cat /proc/cpuinfo  | grep processor | wc -l)
 ROOT_DIR=$(pwd)
 DEPS_DIR="${ROOT_DIR}/deps"
-CLANG_DIR="${DEPS_DIR}/clang/clang+llvm-5.0.0-linux-x86_64-ubuntu16.04"
 
 if [ ! -z "$FORCE_INSTALL" ]; then
     rm -rf ./deps
 fi
 
-if [ -z "$BUILD_EXAMPLE" ]; then
-    BUILD_EXAMPLE=1
-    export CMAKE_BUILD_EXAMPLE="$BUILD_EXAMPLE"
+if [ ! -z "$BUILD_EXAMPLE_THRIFT" ]; then
+    BUILD_EXAMPLE_THRIFT=1
+    export CMAKE_BUILD_EXAMPLE_THRIFT="$BUILD_EXAMPLE_THRIFT"
+fi
+
+if [ -z "$BUILD_EXAMPLE_GRPC" ]; then
+    BUILD_EXAMPLE_GRPC=1
+    export CMAKE_BUILD_EXAMPLE_GRPC="$BUILD_EXAMPLE_GRPC"
 fi
 
 mkdir deps || true
@@ -40,7 +44,8 @@ get_dev_tools() {
         libbison-dev \
         bison \
         flex \
-        bc
+        bc \
+        libbpfcc-dev
 }
 
 get_folly() {
@@ -76,7 +81,7 @@ get_folly() {
 	cd deps
 	git clone https://github.com/facebook/folly --depth 1
 	cd folly/build
-  cmake ..
+  cmake -DCXX_STD=gnu++14 ..
   make -j $NCPUS
   sudo make install
   popd
@@ -92,8 +97,8 @@ get_clang() {
     cd deps
     mkdir clang
     cd clang
-    wget http://releases.llvm.org/5.0.0/clang+llvm-5.0.0-linux-x86_64-ubuntu16.04.tar.xz
-    tar xvf ./clang+llvm-5.0.0-linux-x86_64-ubuntu16.04.tar.xz
+    wget http://releases.llvm.org/8.0.0/clang+llvm-8.0.0-x86_64-linux-gnu-ubuntu-18.04.tar.xz
+    tar xvf ./clang+llvm-8.0.0-x86_64-linux-gnu-ubuntu-18.04.tar.xz
     popd
     touch deps/clang_installed
 }
@@ -106,20 +111,7 @@ get_required_libs() {
         libmnl-dev \
         liblzma-dev \
         libre2-dev
-}
-
-get_linux() {
-    if [ -f "deps/linux_installed" ]; then
-        return
-    fi
-    rm -rf deps/linux
-    pushd .
-    cd deps
-    git clone --branch v4.15 --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
-    cd linux
-    make defconfig
-    popd
-    touch deps/linux_installed
+    sudo apt-get install -y libsodium-dev
 }
 
 get_gtest() {
@@ -156,6 +148,23 @@ get_mstch() {
     touch deps/mstch_installed
 }
 
+get_fizz() {
+    if [ -f "deps/fizz_installed" ]; then
+        return
+    fi
+    rm -rf deps/fizz
+    pushd .
+    cd deps
+    git clone --depth 1 https://github.com/facebookincubator/fizz
+    cd fizz
+    mkdir build_ && cd build_
+    cmake ../fizz/
+    make -j $NCPUS
+    sudo make install
+    popd
+    touch deps/fizz_installed
+}
+
 get_wangle() {
     if [ -f "deps/wangle_installed" ]; then
         return
@@ -179,7 +188,7 @@ get_zstd() {
     rm -rf deps/zstd
     pushd .
     cd deps
-    git clone --depth 1 https://github.com/facebook/zstd
+    git clone --depth 1 https://github.com/facebook/zstd --branch v1.3.7
     cd zstd
     make -j $NCPUS
     sudo make install
@@ -199,16 +208,37 @@ get_fbthrift() {
     cd deps
     git clone --depth 1 https://github.com/facebook/fbthrift || true
     cd fbthrift/build
-    cmake ..
+    cmake -DCXX_STD=gnu++14 ..
     make -j $NCPUS
     sudo make install
     popd
     touch deps/fbthrift_installed
 }
 
+get_rsocket() {
+    if [ -f "deps/rsocket_installed" ]; then
+        return
+    fi
+    rm -rf deps/rsocket-cpp
+    pushd .
+    cd deps
+    git clone --depth 1 https://github.com/rsocket/rsocket-cpp || true
+    mkdir -p rsocket-cpp/build
+    cd rsocket-cpp/build
+    cmake -DCXX_STD=gnu++14 ..
+    make -j $NCPUS
+    sudo make install
+    popd
+    touch deps/rsocket_installed
+}
+
 get_grpc() {
     if [ -f "deps/grpc_installed" ]; then
         return
+    fi
+    GO_INSTALLED=$(which go || true)
+    if [ -z "$GO_INSTALLED" ]; then
+        sudo apt-get install -y golang
     fi
     rm -rf deps/grpc
     pushd .
@@ -216,13 +246,39 @@ get_grpc() {
     git clone  --depth 1 https://github.com/grpc/grpc
     cd grpc
     git submodule update --init
+    mkdir build
+    cd build
+    cmake ..
     make -j $NCPUS
     sudo make install
-    cd third_party/protobuf
+    cd ../third_party/protobuf
     make && sudo make install
     popd
     touch deps/grpc_installed
 }
+
+get_libbpf() {
+    if [ -f "deps/libbpf_installed" ]; then
+        return
+    fi
+    rm -rf deps/libbpf
+    pushd .
+    cd deps
+    git clone --depth 1 https://github.com/libbpf/libbpf || true
+    cd libbpf/src
+    make
+    DESTDIR=../install make install
+    cd ..
+    cp -r include/uapi install/usr/include/bpf/
+    cd install/usr/include/bpf
+    # override to use local bpf.h instead of system wide
+    sed -i 's/#include <linux\/bpf.h>/#include <bpf\/uapi\/linux\/bpf.h>/g' ./bpf.h
+    sed -i 's/#include <linux\/bpf.h>/#include <bpf\/uapi\/linux\/bpf.h>/g' ./libbpf.h
+    popd
+    touch deps/libbpf_installed
+}
+
+
 
 fix_gtest() {
     # oss version require this line for gtest to run/work
@@ -254,7 +310,7 @@ build_katran() {
     mkdir build
     cd build
     cmake ..
-    make
+    make -j $NCPUS
     popd
      ./build_bpf_modules_opensource.sh 2>/dev/null
 }
@@ -272,13 +328,17 @@ get_dev_tools
 get_folly
 get_clang
 get_required_libs
-get_linux
 get_gtest
-if [ "$BUILD_EXAMPLE" -eq 1 ]; then
+get_libbpf
+if [ "$BUILD_EXAMPLE_THRIFT" -eq 1 ]; then
   get_mstch
+  get_fizz
   get_wangle
   get_zstd
+  get_rsocket
   get_fbthrift
+fi
+if [ "$BUILD_EXAMPLE_GRPC" -eq 1 ]; then
   get_grpc
 fi
 if [ -z "$INSTALL_DEPS_ONLY" ]; then

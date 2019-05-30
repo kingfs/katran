@@ -20,7 +20,10 @@
 #include <deque>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
+
+#include <folly/IPAddress.h>
 
 #include "katran/lib/BalancerStructs.h"
 #include "katran/lib/BpfAdapter.h"
@@ -38,6 +41,7 @@ constexpr int kMacAddrPos = 0;
 constexpr int kIpv4TunPos = 1;
 constexpr int kIpv6TunPos = 2;
 constexpr int kMainIntfPos = 3;
+constexpr int kHcIntfPos = 4;
 
 /**
  * constants are from balancer_consts.h
@@ -45,6 +49,9 @@ constexpr int kMainIntfPos = 3;
 constexpr uint32_t kLruCntrOffset = 0;
 constexpr uint32_t kLruMissOffset = 1;
 constexpr uint32_t kLruFallbackOffset = 3;
+constexpr uint32_t kIcmpTooBigOffset = 4;
+constexpr uint32_t kLpmSrcOffset = 5;
+constexpr uint32_t kInlineDecapOffset = 6;
 
 /**
  * LRU map related constants
@@ -191,6 +198,16 @@ class KatranLb {
   std::vector<NewReal> getRealsForVip(const VipKey& vip);
 
   /**
+   * @param string address of the real
+   * @return int64_t internal index of the real. -1 if does not exists
+   *
+   * helper function to get internal (to katran) index of real
+   * could be used in other helpers. e.g. to get per real statistics.
+   * if real does not exist index -1 would be returned.
+   */
+  int64_t getIndexForReal(const std::string& real);
+
+  /**
    * @param ModifyAction action. either ADD or DEL
    * @param std::vector<QuicReal> reals to be modified
    *
@@ -210,10 +227,121 @@ class KatranLb {
   std::vector<QuicReal> getQuicRealsMapping();
 
   /**
+   * @param vector<string> of source prefixes
+   * @param string dst address where specified sources are going to be routed
+   * @return int 0 on success, number of errors otherwise
+   *
+   * helper function to add src prefixes to destination mapping
+   */
+  int addSrcRoutingRule(
+      const std::vector<std::string>& srcs,
+      const std::string& dst);
+
+  /**
+   * @param vector<CIDRNetwork> of source prefixes
+   * @param string dst address where specified sources are going to be routed
+   * @return int 0 on success, number of errors otherwise
+   *
+   * helper function to add src prefixes to destination mapping
+   */
+  int addSrcRoutingRule(
+      const std::vector<folly::CIDRNetwork>& srcs,
+      const std::string& dst);
+
+  /**
+   * @param vector<string> of source prefixes
+   * @return bool true if there was no fatal errors
+   *
+   * helper function to delete src prefixes to destination mapping
+   */
+  bool delSrcRoutingRule(const std::vector<std::string>& srcs);
+
+  /**
+   * @param vector<CIDRNetwork> of source prefixes
+   * @return bool true if there was no fatal errors
+   *
+   * helper function to delete src prefixes to destination mapping
+   */
+  bool delSrcRoutingRule(const std::vector<folly::CIDRNetwork>& srcs);
+
+  /**
+   * @param string address for inline decapsulation
+   * @return bool true on success
+   *
+   * helper function to add address, so all packets toward it would be
+   * decapsulated in bpf context.
+   */
+  bool addInlineDecapDst(const std::string& dst);
+
+  /**
+   * @param string address for inline decapsulation
+   * @return bool true on success
+   *
+   * helper function to delete address, which is used for inline
+   * decapsulation
+   */
+  bool delInlineDecapDst(const std::string& dst);
+
+  /**
+   * @return vector<string> destanations
+   *
+   * helper function to get/query currently used destanations for inline
+   * decapsulation
+   */
+  std::vector<std::string> getInlineDecapDst();
+
+  /**
+   * @return bool true if there was no fatal errors
+   *
+   * helper function to clear all source routing rules
+   */
+  bool clearAllSrcRoutingRules();
+
+  /**
+   * @return map<string,string> of src to dst mapping
+   *
+   * helper function to get all source to destination mappings
+   */
+  std::unordered_map<std::string, std::string> getSrcRoutingRule();
+
+  /**
+   * @return map<CIDRNetwork,string> of src to dst mapping
+   *
+   * helper function to get all source to destination mappings
+   */
+  std::unordered_map<folly::CIDRNetwork, std::string> getSrcRoutingRuleCidr();
+
+  /**
+   * @return const map<CIDRNetwork, uint32_t>& of src to dst mapping
+   *
+   * helper function to get const reference for internal source to destination
+   * mapping.
+   */
+  const std::unordered_map<folly::CIDRNetwork, uint32_t>& getSrcRoutingMap() {
+    return lpmSrcMapping_;
+  }
+
+  /**
+   * @return const map<uint32_t, str>& of internal index to real mapping
+   *
+   * helper function to get internal index to real's ip address mapping.
+   */
+  const std::unordered_map<uint32_t, std::string>& getNumToRealMap() {
+    return numToReals_;
+  }
+
+  /**
+   * @return uint32_t number of src to dst mappings
+   *
+   * helper function to get current number of rules for source based routing
+   */
+  uint32_t getSrcRoutingRuleSize();
+
+  /**
    * @param VipKey vip
    * @return struct lb_stats w/ statistic for specified vip
    *
-   * helper function which return totall ammount of pkts and bytes which
+   * helper function which return total ammount of pkts and bytes which
    * has been sent to specified vip. it's up to external entity to calculate
    * actual speed in pps/bps
    */
@@ -222,7 +350,7 @@ class KatranLb {
   /**
    * @return struct lb_stats w/ statistics for lru misses
    *
-   * helper function which returns totall amount of processed packets and
+   * helper function which returns total amount of processed packets and
    * how much of em was lru misses (when we wasnt able to find entry in
    * connection table)
    */
@@ -231,7 +359,7 @@ class KatranLb {
   /**
    * @return struct lb_stats w/ statistic of the reasons for lru misses
    *
-   * helper function which return totall amount of tcp lru misses because of
+   * helper function which returns total amount of tcp lru misses because of
    * the tcp syns (v1) or non-syns (v2)
    */
   lb_stats getLruMissStats();
@@ -239,10 +367,45 @@ class KatranLb {
   /**
    * @return struct lb_stats w/ statistic of fallback lru hits
    *
-   * helper function which return totall amount of numbers when we fel back
+   * helper function which return total amount of numbers when we fel back
    * to fallback_lru (v1);
    */
   lb_stats getLruFallbackStats();
+
+  /**
+   * @return struct lb_stats w/ statistic of icmp packet too big packets
+   *
+   * helper function which returns how many icmpv4/icmpv6 packet too big
+   * has been generated after we have received packet, which is bigger then
+   * maximum supported size.
+   */
+  lb_stats getIcmpTooBigStats();
+
+  /**
+   * @return struct lb_stats w/ src routing related statistics
+   *
+   * helper function which returns how many packets were sent to local
+   * backends (v1) and how many matched lpm src rule and were sent to remote
+   * destination (v2)
+   */
+  lb_stats getSrcRoutingStats();
+
+  /**
+   * @return struct lb_stats w/ src inline decapsulation statistics
+   *
+   * helper function which returns how many packets were decapsulated
+   * inline (v1)
+   */
+  lb_stats getInlineDecapStats();
+
+  /**
+   * @param uint32_t index of the real
+   * @return struct lb_stats w/ per real pps and bps statistics
+   *
+   * helper function which returns per real statistics for real with specified
+   * index.
+   */
+  lb_stats getRealStats(uint32_t index);
 
   /**
    * @param uint32_t somark of the packet
@@ -278,7 +441,7 @@ class KatranLb {
    */
   int getKatranProgFd() {
     return bpfAdapter_.getProgFdByName("xdp-balancer");
-  };
+  }
 
   /**
    * @return int fd of the healthchecker's bpf program
@@ -286,7 +449,7 @@ class KatranLb {
    */
   int getHealthcheckerProgFd() {
     return bpfAdapter_.getProgFdByName("cls-hc");
-  };
+  }
 
  private:
   /**
@@ -305,7 +468,7 @@ class KatranLb {
   /**
    * helper function to get stats from counter on specified possition
    */
-  lb_stats getLbStats(uint32_t position);
+  lb_stats getLbStats(uint32_t position, const std::string& map = "stats");
 
   /**
    * helper function to decrease real's ref count and delete it from
@@ -350,46 +513,56 @@ class KatranLb {
       int numaNode = kNoNuma);
 
   /**
-   * maximum amount of vips, which katran supports (must be the same number as
-   * in forwarding plane (compiled xdp prog))
+   * helper function which do forwarding plane feature discovering
    */
-  uint32_t maxVips_;
+  void featureDiscovering();
 
   /**
-   * maximum ammount of reals,  which katran supports (must be the same number
-   * as in forwarding plane).
+   * helper function to validate that specified string is a valid ip address
+   * (or network prefix if allowNetAddr is equal to true)
    */
-  uint32_t maxReals_;
+  AddressType validateAddress(
+      const std::string& addr,
+      bool allowNetAddr = false);
 
   /**
-   * size of ch ring (must be the same number as in forwarding plane).
+   * helper function to add or remove src (string src) to dst (rnum; id of
+   * real in numToReals_ structure) - used for source based
+   * routing) to/from forwarding plane
    */
-  uint32_t chRingSize_;
+  bool modifyLpmSrcRule(
+      ModifyAction action,
+      const folly::CIDRNetwork& src,
+      uint32_t rnum);
+
+  /**
+   * helper function to modify specified lpm map. convention is: all lpm maps
+   * are named <map_prefix>_v4 or _v6. suffix would be automatically added by
+   * this routine depending on addr's family.
+   */
+  bool modifyLpmMap(
+      const std::string& lpmMapNamePrefix,
+      ModifyAction action,
+      const folly::CIDRNetwork& addr,
+      void* value);
+
+  /**
+   * helper function to modify inline decap destanations map
+   */
+  bool modifyDecapDst(
+      ModifyAction action,
+      const std::string& dst,
+      const uint32_t flags = 0);
+
+  /**
+   * main configurations of katran
+   */
+  KatranConfig config_;
 
   /**
    * bpf adapter to program forwarding plane
    */
   BpfAdapter bpfAdapter_;
-
-  /**
-   * priority of tc prog for healthchecking
-   */
-  uint32_t tcPriority_;
-
-  /**
-   * path to bpf code for main balancer program
-   */
-  std::string balancerProgPath_;
-
-  /**
-   * path to bpf code for healthchecking
-   */
-  std::string healthcheckingProgPath_;
-
-  /**
-   * path to rootlet's pinned prog array
-   */
-  std::string rootMapPath_;
 
   /**
    * vector of unused possitions for vips and reals. for each element
@@ -420,9 +593,14 @@ class KatranLb {
   std::unordered_map<VipKey, Vip, VipKeyHasher> vips_;
 
   /**
-   * flag for testing. if set to true - we wont program forwarding path.
+   * map of src address to dst mapping. used for source based routing.
    */
-  bool testing_;
+  std::unordered_map<folly::CIDRNetwork, uint32_t> lpmSrcMapping_;
+
+  /**
+   * set of destantions, which are used for inline decapsulation.
+   */
+  std::unordered_set<std::string> decapDsts_;
 
   /**
    * flag which indicates if katran is working in "standalone" mode or not.
@@ -435,16 +613,6 @@ class KatranLb {
   int rootMapFd_;
 
   /**
-   * poisition inside rootMapFd_ if we are in "shared" mode
-   */
-  uint32_t rootMapPos_;
-
-  /**
-   * flag, which indicates should we load healtcheck related routines or not
-   */
-  bool enableHc_;
-
-  /**
    * flag which indicates that bpf progs has been loaded.
    */
   bool progsLoaded_{false};
@@ -453,6 +621,18 @@ class KatranLb {
    * flag which indicates that bpf progs has been attached
    */
   bool progsAttached_{false};
+
+  /**
+   * flag which indicates that source based routing feature has been
+   * enabled/compiled in bpf forwarding plane
+   */
+  bool srcRouting_{false};
+
+  /**
+   * flag which indicates that inline decapsulation feature has been
+   * enabled/compiled in bpf forwarding plane
+   */
+  bool inlineDecap_{false};
 
   /**
    * vector of forwarding CPUs (cpus/cores which are responisible for NICs
@@ -471,12 +651,6 @@ class KatranLb {
    * vector of LRU maps descriptors;
    */
   std::vector<int> lruMapsFd_;
-
-  /**
-   * totall LRUs map size; each forwarding cpu/core will have
-   * total_size/forwarding_cores entries
-   */
-  uint64_t totalLruSize_;
 };
 
 } // namespace katran
